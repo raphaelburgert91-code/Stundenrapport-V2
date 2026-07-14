@@ -13,16 +13,25 @@
   const LAST_VIEW_KEY = "stundenrapport-last-view";
   const OLD_LAST_WEEK_KEY = "stundenrapport-last-week";
 
-  const categories = [
-    "Gruppe vormittags",
-    "Gruppe nachmittags",
-    "Pädagogische Vor-/Nachbereitung",
-    "Dienstbeginn/Entlassen/Raum richten",
+  const defaultCategories = [
+    "Arbeit in der Gruppe vormittags",
+    "Arbeit in der Gruppe nachmittags",
+    "Pädagogische Vor- und Nachbereitung",
+    "Dienstbeginn / Entlassen / Raum richten",
     "Elternarbeit",
     "Dienstbesprechung"
   ];
 
-  const dayNames = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
+  const legacyCategoryMap = {
+    "Gruppe vormittags": "Arbeit in der Gruppe vormittags",
+    "Gruppe nachmittags": "Arbeit in der Gruppe nachmittags",
+    "Pädagogische Vor-/Nachbereitung": "Pädagogische Vor- und Nachbereitung",
+    "Dienstbeginn/Entlassen/Raum richten": "Dienstbeginn / Entlassen / Raum richten",
+    "Dienstbesprechung": "Dienstbesprechung",
+    "Elternarbeit": "Elternarbeit"
+  };
+
+  const dayNames = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
   const state = loadState();
   let selectedPeriod = getInitialPeriod();
   let selectedDate = getInitialDate();
@@ -38,7 +47,9 @@
   const settingsRegionInput = document.getElementById("settingsRegionInput");
   const settingsYearInput = document.getElementById("settingsYearInput");
   const weeklyTargetLabel = document.getElementById("weeklyTargetLabel");
-  const weekRange = document.getElementById("weekRange");
+  const saveStatus = document.getElementById("saveStatus");
+  const backupSaveButton = document.getElementById("backupSaveButton");
+  const backupLoadInput = document.getElementById("backupLoadInput");
   const weekTotal = document.getElementById("weekTotal");
   const weekBalance = document.getElementById("weekBalance");
   const carryBalance = document.getElementById("carryBalance");
@@ -67,6 +78,12 @@
     document.getElementById("printButton").addEventListener("click", () => {
       triggerPrint();
     });
+    if (backupSaveButton) {
+      backupSaveButton.addEventListener("click", saveBackup);
+    }
+    if (backupLoadInput) {
+      backupLoadInput.addEventListener("change", loadBackup);
+    }
     reportTypeSelect.addEventListener("change", renderReport);
     document.getElementById("openWeekFromMonthButton").addEventListener("click", () => showView("entryView"));
 
@@ -88,7 +105,7 @@
       render();
     });
     const updateStartCarry = (valueInput) => {
-      const value = parseDecimal(valueInput.value);
+      const value = parseCarryInput(valueInput.value);
       if (value === null) {
         return;
       }
@@ -160,7 +177,7 @@
       const option = document.createElement("option");
       const range = getWeekDates(year, week);
       option.value = periodKey(year, week);
-      option.textContent = `${year} - KW ${week} (${formatShortDate(range[0])} - ${formatShortDate(range[4])})`;
+      option.textContent = `${year} - KW ${week} (${formatShortDate(range[0])} - ${formatShortDate(range[6])})`;
       weekSelect.appendChild(option);
     });
     weekSelect.value = periodKey(selectedPeriod.year, selectedPeriod.week);
@@ -262,18 +279,110 @@
           : "Baden-Württemberg",
         year: Number.isFinite(savedState.settings?.year)
           ? savedState.settings.year
-          : new Date().getFullYear()
+          : new Date().getFullYear(),
+        categories: normalizeCategories(savedState.settings?.categories)
       }
     };
   }
 
   function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    showSaveStatus();
+  }
+
+  function showSaveStatus(message = "Gespeichert") {
+    if (!saveStatus) {
+      return;
+    }
+    saveStatus.textContent = message;
+    saveStatus.hidden = false;
+    window.clearTimeout(showSaveStatus.timeoutId);
+    showSaveStatus.timeoutId = window.setTimeout(() => {
+      saveStatus.hidden = true;
+    }, 1800);
   }
 
   function saveName(value) {
     state.settings.name = String(value || "").trim();
     saveState();
+  }
+
+  function normalizeCategories(value) {
+    const source = Array.isArray(value) ? value : defaultCategories;
+    return defaultCategories.map((fallback, index) => {
+      const label = String(source[index] || "").trim();
+      return label || fallback;
+    });
+  }
+
+  function getCategories() {
+    state.settings.categories = normalizeCategories(state.settings.categories);
+    return state.settings.categories;
+  }
+
+  function updateCategory(index, value) {
+    const categories = getCategories();
+    const nextValue = String(value || "").trim() || defaultCategories[index];
+    if (categories[index] === nextValue) {
+      return;
+    }
+    categories[index] = nextValue;
+    Object.values(state.weeks || {}).forEach((week) => {
+      Object.values(week.days || {}).forEach((day) => {
+        if (Array.isArray(day.entries) && day.entries[index]) {
+          day.entries[index].category = nextValue;
+        }
+      });
+    });
+    saveState();
+    render();
+  }
+
+  function saveBackup() {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      app: "stundenrapport-v2",
+      data: state
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Stundenrapport_Backup_${getDateKey(new Date())}.json`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    showSaveStatus("Backup gespeichert");
+  }
+
+  function loadBackup(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    if (!window.confirm("Vorhandene Daten werden überschrieben. Fortfahren?")) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || "{}"));
+        const importedState = parsed.data && parsed.data.weeks ? parsed.data : parsed;
+        if (!importedState.weeks) {
+          throw new Error("Keine Wochen-Daten gefunden.");
+        }
+        const normalized = normalizeState(importedState);
+        state.weeks = normalized.weeks;
+        state.settings = normalized.settings;
+        ensureWeek(selectedPeriod.year, selectedPeriod.week);
+        saveState();
+        render();
+        window.alert("Backup wurde geladen.");
+      } catch (error) {
+        console.warn("Backup konnte nicht geladen werden.", error);
+        window.alert("Backup konnte nicht geladen werden.");
+      }
+    });
+    reader.readAsText(file);
   }
 
   function persistSelection() {
@@ -346,9 +455,9 @@
         state.weeks[key].days[dayKey] = {
           date: dayKey,
           weekday: dayName,
-          dayType: "workday",
+          dayType: index >= 5 ? "free" : "workday",
           allowHolidayWork: false,
-          entries: categories.map((category) => ({
+          entries: getCategories().map((category) => ({
             category,
             from: "",
             to: ""
@@ -356,11 +465,54 @@
           remark: ""
         };
         changed = true;
+      } else if (normalizeDay(state.weeks[key].days[dayKey], dayName, index)) {
+        changed = true;
       }
     });
     if (changed) {
       saveState();
     }
+  }
+
+  function normalizeDay(day, dayName, index) {
+    let changed = false;
+    if (day.weekday !== dayName) {
+      day.weekday = dayName;
+      changed = true;
+    }
+    if (!day.dayType) {
+      day.dayType = index >= 5 ? "free" : "workday";
+      changed = true;
+    }
+    if (!Array.isArray(day.entries)) {
+      day.entries = [];
+      changed = true;
+    }
+
+    const previousEntries = new Map();
+    day.entries.forEach((entry) => {
+      const normalizedCategory = legacyCategoryMap[entry.category] || entry.category;
+      if (!previousEntries.has(normalizedCategory)) {
+        previousEntries.set(normalizedCategory, {
+          category: normalizedCategory,
+          from: entry.from || "",
+          to: entry.to || ""
+        });
+      }
+    });
+
+    const nextEntries = getCategories().map((category) => previousEntries.get(category) || {
+      category,
+      from: "",
+      to: ""
+    });
+
+    if (JSON.stringify(day.entries) !== JSON.stringify(nextEntries)) {
+      day.entries = nextEntries;
+      changed = true;
+    }
+
+    return changed;
   }
 
   function render() {
@@ -381,8 +533,8 @@
     nameInput.value = getDisplayName();
     settingsNameInput.value = getDisplayName();
     weeklyTargetInput.value = formatDecimal(getWeeklyTarget());
-    settingsStartCarryInput.value = formatDecimal(getStartCarry());
-    startCarryInput.value = formatDecimal(getStartCarry());
+    settingsStartCarryInput.value = formatDurationInput(getStartCarry());
+    startCarryInput.value = formatDurationInput(getStartCarry());
     settingsRegionInput.value = getSettingsRegion();
     settingsYearInput.value = String(getSettingsYear());
     weeklyTargetLabel.textContent = formatHours(getWeekTarget(selectedPeriod.year, selectedPeriod.week));
@@ -396,110 +548,185 @@
   }
 
   function renderDashboard() {
-    const dates = getWeekDates(selectedPeriod.year, selectedPeriod.week);
     const total = getWeekTotal(selectedPeriod.year, selectedPeriod.week);
     const target = getWeekTarget(selectedPeriod.year, selectedPeriod.week);
     const balance = roundHours(total - target);
     const carry = getCarryAfterWeek(selectedPeriod.year, selectedPeriod.week);
 
-    weekRange.textContent = `${formatDate(dates[0])} - ${formatDate(dates[4])}`;
-    weekTotal.textContent = formatHours(total);
-    weekBalance.textContent = formatSignedHours(balance);
+    weekTotal.textContent = formatDuration(total);
+    weekBalance.textContent = formatSignedDuration(balance);
     if (document.activeElement !== startCarryInput && document.activeElement !== settingsStartCarryInput) {
-      startCarryInput.value = formatDecimal(getStartCarry());
-      settingsStartCarryInput.value = formatDecimal(getStartCarry());
+      startCarryInput.value = formatDurationInput(getStartCarry());
+      settingsStartCarryInput.value = formatDurationInput(getStartCarry());
     }
-    carryBalance.textContent = formatSignedHours(carry);
+    carryBalance.textContent = formatSignedDuration(carry);
     setBalanceClass(weekBalanceCard, balance);
     setBalanceClass(carryBalanceCard, carry);
   }
 
   function renderEntryView() {
     dayCards.innerHTML = "";
-    getOrderedDays(selectedPeriod.year, selectedPeriod.week).forEach((day) => {
-      const template = document.getElementById("dayTemplate").content.cloneNode(true);
-      const card = template.querySelector(".day-card");
-      const dayDate = new Date(`${day.date}T00:00:00`);
-      const total = getDayTotal(day);
-      const holidayDate = isHoliday(dayDate);
-      const isReadOnlyDay = day.dayType !== "workday" || (holidayDate && !day.allowHolidayWork);
-      card.classList.toggle("empty", total === 0 && !day.remark);
-      card.classList.toggle("positive", total > 0);
-      card.classList.toggle("vacation", day.dayType === "vacation");
-      card.classList.toggle("illness", day.dayType === "illness");
-      card.classList.toggle("free", day.dayType === "free");
-      card.classList.toggle("holiday", holidayDate);
-      template.querySelector("h2").textContent = day.weekday;
-      template.querySelector("p").textContent = formatDate(dayDate);
-      template.querySelector(".day-total").textContent = formatHours(total);
-      const statusLabel = holidayDate ? "Feiertag" : getDayTypeLabel(day);
-      template.querySelector(".day-status-pill").textContent = statusLabel;
-      template.querySelector(".day-target-pill").textContent = `Soll: ${formatHours(getDayTarget(day))}`;
-      const typeSelect = template.querySelector(".day-type-select");
-      typeSelect.value = day.dayType || "workday";
-      typeSelect.addEventListener("change", () => {
-        day.dayType = typeSelect.value;
-        day.allowHolidayWork = false;
-        saveState();
-        render();
-      });
-      const holidayButton = template.querySelector(".holiday-button");
-      holidayButton.classList.toggle("active", Boolean(day.allowHolidayWork));
-      holidayButton.textContent = holidayDate && day.allowHolidayWork ? "Arbeitszeit wird erfasst" : "Trotz Feiertag Arbeitszeit erfassen";
-      holidayButton.addEventListener("click", () => {
-        day.allowHolidayWork = !day.allowHolidayWork;
-        saveState();
-        render();
-      });
-      holidayButton.style.display = holidayDate ? "inline-flex" : "none";
-      typeSelect.disabled = holidayDate && !day.allowHolidayWork;
-      const entries = template.querySelector(".entries");
-      entries.classList.toggle("disabled", isReadOnlyDay);
-      day.entries.forEach((entry, entryIndex) => {
-        entries.appendChild(createEntryRow(day.date, entry, entryIndex));
-      });
+    const shell = document.createElement("section");
+    shell.className = "week-sheet";
+    shell.innerHTML = `
+      <div class="week-table-scroll" tabindex="0" aria-label="Wochen-Tabelle">
+        <table class="week-entry-table">
+          <colgroup>
+            <col class="day-col">
+            ${getCategories().map(() => '<col class="time-col"><col class="time-col">').join("")}
+            <col class="total-col">
+            <col class="remark-col">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="sticky-day-column" rowspan="2">Tag</th>
+              ${getCategories().map((category, index) => `
+                <th colspan="2">
+                  <label class="category-heading">
+                    <textarea rows="2" data-category-index="${index}" aria-label="Tätigkeit ${index + 1}">${escapeHtml(category)}</textarea>
+                  </label>
+                </th>`).join("")}
+              <th rowspan="2">Gesamt</th>
+              <th rowspan="2">Bemerkung</th>
+            </tr>
+            <tr>${getCategories().map(() => "<th>Von</th><th>Bis</th>").join("")}</tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="week-summary-panel"></div>
+    `;
 
-      const textarea = template.querySelector("textarea");
-      textarea.value = day.remark || "";
-      textarea.addEventListener("input", () => {
-        day.remark = textarea.value;
-        saveState();
-        renderDashboard();
-        renderReport();
+    shell.querySelectorAll("[data-category-index]").forEach((input) => {
+      input.addEventListener("blur", () => {
+        updateCategory(Number(input.dataset.categoryIndex), input.value);
       });
-
-      dayCards.appendChild(template);
+      input.addEventListener("change", () => {
+        updateCategory(Number(input.dataset.categoryIndex), input.value);
+      });
     });
+    const tbody = shell.querySelector("tbody");
+    getOrderedDays(selectedPeriod.year, selectedPeriod.week).forEach((day) => {
+      tbody.appendChild(createWeekTableRow(day));
+    });
+
+    dayCards.appendChild(shell);
+    renderWeekSummaryPanel(shell);
   }
 
-  function createEntryRow(dayKey, entry, entryIndex) {
-    const row = document.createElement("div");
-    row.className = "entry-row";
-    row.dataset.dayKey = dayKey;
-    row.dataset.entryIndex = entryIndex;
+  function createWeekTableRow(day) {
+    const row = document.createElement("tr");
+    row.className = "week-day-row";
+    row.dataset.dayKey = day.date;
 
-    const title = document.createElement("div");
-    title.className = "entry-title";
-    title.textContent = entry.category;
+    const dayDate = new Date(`${day.date}T00:00:00`);
+    const total = getDayTotal(day);
+    const holidayDate = isHoliday(dayDate);
+    const isReadOnlyDay = day.dayType !== "workday" || (holidayDate && !day.allowHolidayWork);
+    row.classList.toggle("empty", total === 0 && !day.remark);
+    row.classList.toggle("positive", total > 0);
+    row.classList.toggle("vacation", day.dayType === "vacation");
+    row.classList.toggle("illness", day.dayType === "illness");
+    row.classList.toggle("free", day.dayType === "free" || day.dayType === "holiday");
+    row.classList.toggle("holiday", holidayDate || day.dayType === "holiday");
 
-    const day = state.weeks[periodKey(selectedPeriod.year, selectedPeriod.week)].days[dayKey];
-    const isHolidayLocked = isHoliday(new Date(`${dayKey}T00:00:00`)) && !day.allowHolidayWork && day.dayType === "workday";
-    const isReadOnly = day.dayType !== "workday" || isHolidayLocked;
+    const dayCell = document.createElement("th");
+    dayCell.className = "sticky-day-column day-table-cell";
+    const dayStack = document.createElement("div");
+    dayStack.className = "day-table-stack";
+    dayStack.innerHTML = `
+      <strong>${escapeHtml(day.weekday)}</strong>
+      <span>${formatDate(dayDate)} · Soll ${formatHours(getDayTarget(day))}</span>
+    `;
+    const typeSelect = createDayTypeSelect(day);
+    typeSelect.addEventListener("change", () => {
+      day.dayType = typeSelect.value;
+      day.allowHolidayWork = false;
+      saveState();
+      render();
+    });
+    dayStack.appendChild(typeSelect);
 
-    const fromLabel = document.createElement("label");
-    fromLabel.innerHTML = '<span class="time-label">Von</span>';
-    fromLabel.appendChild(createTimeInput(dayKey, entryIndex, "from", entry.from || "", isReadOnly));
+    const holidayButton = document.createElement("button");
+    holidayButton.className = "holiday-button table-holiday-button";
+    holidayButton.type = "button";
+    holidayButton.textContent = holidayDate && day.allowHolidayWork ? "Arbeitszeit wird erfasst" : "Trotz Feiertag Arbeitszeit erfassen";
+    holidayButton.classList.toggle("active", Boolean(day.allowHolidayWork));
+    holidayButton.hidden = !holidayDate;
+    holidayButton.addEventListener("click", () => {
+      day.allowHolidayWork = !day.allowHolidayWork;
+      saveState();
+      render();
+    });
+    dayStack.appendChild(holidayButton);
+    dayCell.appendChild(dayStack);
+    row.appendChild(dayCell);
 
-    const toLabel = document.createElement("label");
-    toLabel.innerHTML = '<span class="time-label">Bis</span>';
-    toLabel.appendChild(createTimeInput(dayKey, entryIndex, "to", entry.to || "", isReadOnly));
+    day.entries.forEach((entry, entryIndex) => {
+      const fromCell = document.createElement("td");
+      fromCell.appendChild(createTimeInput(day.date, entryIndex, "from", entry.from || "", isReadOnlyDay));
+      const toCell = document.createElement("td");
+      toCell.appendChild(createTimeInput(day.date, entryIndex, "to", entry.to || "", isReadOnlyDay));
+      row.append(fromCell, toCell);
+    });
 
-    const duration = document.createElement("div");
-    duration.className = "duration";
-    duration.textContent = formatHours(getEntryDuration(entry));
+    const totalCell = document.createElement("td");
+    totalCell.className = "duration week-day-total";
+    totalCell.textContent = formatDuration(total);
+    row.appendChild(totalCell);
 
-    row.append(title, fromLabel, toLabel, duration);
+    const remarkCell = document.createElement("td");
+    const remarkInput = document.createElement("input");
+    remarkInput.type = "text";
+    remarkInput.className = "remark-input";
+    remarkInput.value = day.remark || "";
+    remarkInput.disabled = day.dayType !== "workday" && !day.remark;
+    remarkInput.addEventListener("input", () => {
+      day.remark = remarkInput.value;
+      saveState();
+      renderDashboard();
+      renderReport();
+    });
+    remarkCell.appendChild(remarkInput);
+    row.appendChild(remarkCell);
     return row;
+  }
+
+  function createDayTypeSelect(day) {
+    const select = document.createElement("select");
+    select.className = "day-type-select";
+    select.setAttribute("aria-label", "Tagesart auswählen");
+    [
+      ["workday", "Arbeit"],
+      ["vacation", "Urlaub"],
+      ["illness", "Krankheit"],
+      ["holiday", "Feiertag"],
+      ["free", "Frei"]
+    ].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      select.appendChild(option);
+    });
+    select.value = day.dayType || "workday";
+    return select;
+  }
+
+  function renderWeekSummaryPanel(container = dayCards) {
+    const summary = container.querySelector(".week-summary-panel");
+    if (!summary) {
+      return;
+    }
+    const total = getWeekTotal(selectedPeriod.year, selectedPeriod.week);
+    const target = getWeekTarget(selectedPeriod.year, selectedPeriod.week);
+    const carryBefore = getCarryBeforeWeek(selectedPeriod.year, selectedPeriod.week);
+    const newCarry = getCarryAfterWeek(selectedPeriod.year, selectedPeriod.week);
+    summary.innerHTML = `
+      <div class="summary-card"><span>Geleistete Wochenarbeitszeit</span><strong>${formatDuration(total)}</strong></div>
+      <div class="summary-card"><span>Soll-Wochenarbeitszeit</span><strong>${formatHours(target)}</strong></div>
+      <div class="summary-card"><span>Übertrag Vorwoche</span><strong>${formatSignedDuration(carryBefore)}</strong></div>
+      <div class="summary-card balance ${newCarry >= 0 ? "positive" : "negative"}"><span>Neuer Übertrag</span><strong>${formatSignedDuration(newCarry)}</strong></div>
+    `;
   }
 
   function createTimeInput(dayKey, entryIndex, field, initialValue, isReadOnly) {
@@ -573,20 +800,16 @@
   }
 
   function updateEntryRow(dayKey, entryIndex) {
-    const row = dayCards.querySelector(`[data-day-key="${dayKey}"][data-entry-index="${entryIndex}"]`);
+    const row = dayCards.querySelector(`[data-day-key="${dayKey}"]`);
     if (!row) {
       return;
     }
     const day = state.weeks[periodKey(selectedPeriod.year, selectedPeriod.week)].days[dayKey];
-    const entry = day.entries[entryIndex];
-    row.querySelector(".duration").textContent = formatHours(getEntryDuration(entry));
-    const card = row.closest(".day-card");
-    if (card) {
-      const total = getDayTotal(day);
-      card.classList.toggle("empty", total === 0 && !day.remark);
-      card.classList.toggle("positive", total > 0);
-      card.querySelector(".day-total").textContent = formatHours(total);
-    }
+    const total = getDayTotal(day);
+    row.classList.toggle("empty", total === 0 && !day.remark);
+    row.classList.toggle("positive", total > 0);
+    row.querySelector(".week-day-total").textContent = formatDuration(total);
+    renderWeekSummaryPanel();
   }
 
   function renderMonthlyOverview() {
@@ -627,7 +850,7 @@
       </article>
       <article class="summary-card">
         <span>Ist-Stunden</span>
-        <strong>${formatHours(total)}</strong>
+        <strong>${formatDuration(total)}</strong>
       </article>
       <article class="summary-card">
         <span>Sollstunden</span>
@@ -635,11 +858,11 @@
       </article>
       <article class="summary-card">
         <span>Plus / Minus</span>
-        <strong>${formatSignedHours(balance)}</strong>
+        <strong>${formatSignedDuration(balance)}</strong>
       </article>
       <article class="summary-card">
         <span>Übertrag</span>
-        <strong>${formatSignedHours(carry)}</strong>
+        <strong>${formatSignedDuration(carry)}</strong>
       </article>
     `;
 
@@ -654,11 +877,11 @@
           return `
             <tr>
               <td>${period.year} - KW ${period.week}</td>
-              <td>${formatShortDate(dates[0])} - ${formatShortDate(dates[4])}</td>
-              <td>${formatHours(weekTotalValue)}</td>
+              <td>${formatShortDate(dates[0])} - ${formatShortDate(dates[6])}</td>
+              <td>${formatDuration(weekTotalValue)}</td>
               <td>${formatHours(weekTargetValue)}</td>
-              <td>${formatSignedHours(weekBalanceValue)}</td>
-              <td>${formatSignedHours(weekCarry)}</td>
+              <td>${formatSignedDuration(weekBalanceValue)}</td>
+              <td>${formatSignedDuration(weekCarry)}</td>
             </tr>`;
         }).join("");
   }
@@ -698,9 +921,9 @@
           <td>${monthSummaryStats.illness}</td>
           <td>${monthSummaryStats.holiday}</td>
           <td>${monthSummaryStats.free}</td>
-          <td>${formatHours(monthTotal)}</td>
+          <td>${formatDuration(monthTotal)}</td>
           <td>${formatHours(monthTarget)}</td>
-          <td>${formatSignedHours(monthBalance)}</td>
+          <td>${formatSignedDuration(monthBalance)}</td>
         </tr>`);
     }
 
@@ -714,9 +937,9 @@
         <td>${totalIllness}</td>
         <td>${totalHoliday}</td>
         <td>${totalFree}</td>
-        <td>${formatHours(totalHours)}</td>
+        <td>${formatDuration(totalHours)}</td>
         <td>${formatHours(totalTarget)}</td>
-        <td>${formatSignedHours(totalBalance)}</td>
+        <td>${formatSignedDuration(totalBalance)}</td>
       </tr>
     `;
 
@@ -745,7 +968,7 @@
         </article>
         <article class="summary-card">
           <span>Gesamtstunden</span>
-          <strong>${formatHours(totalHours)}</strong>
+          <strong>${formatDuration(totalHours)}</strong>
         </article>
         <article class="summary-card">
           <span>Sollstunden</span>
@@ -753,11 +976,11 @@
         </article>
         <article class="summary-card">
           <span>Plus / Minus</span>
-          <strong>${formatSignedHours(totalBalance)}</strong>
+          <strong>${formatSignedDuration(totalBalance)}</strong>
         </article>
         <article class="summary-card">
           <span>Übertrag gesamt</span>
-          <strong>${formatSignedHours(yearCarry)}</strong>
+          <strong>${formatSignedDuration(yearCarry)}</strong>
         </article>
       `;
     }
@@ -790,31 +1013,34 @@
       <div class="report-header">
         <div>
           <h2>Wochenrapport</h2>
-        </div>
-        <div>
-          <strong>${selectedPeriod.year} - KW ${selectedPeriod.week}</strong><br>
-          ${formatDate(dates[0])} - ${formatDate(dates[4])}
+          <div class="report-meta">
+            <div><span>Name</span><strong>${escapeHtml(getDisplayName() || "-")}</strong></div>
+            <div><span>Kalenderwoche</span><strong>${selectedPeriod.year} - KW ${selectedPeriod.week}</strong></div>
+            <div><span>Woche von</span><strong>${formatDate(dates[0])}</strong></div>
+            <div><span>Woche bis</span><strong>${formatDate(dates[6])}</strong></div>
+          </div>
         </div>
       </div>
-      <table class="report-table">
+      <table class="report-table report-week-table">
         <thead>
           <tr>
-            <th>Datum</th>
-            <th>Wochentag</th>
-            <th>Tagesart</th>
-            <th>Arbeitszeiten</th>
-            <th>Tagesstunden</th>
-            <th>Bemerkung</th>
+            <th rowspan="2">Tag</th>
+            ${getCategories().map((category) => `<th colspan="2">${escapeHtml(category)}</th>`).join("")}
+            <th rowspan="2">Tagesgesamt</th>
+            <th rowspan="2">Bemerkung</th>
+          </tr>
+          <tr>
+            ${getCategories().map(() => "<th>Von</th><th>Bis</th>").join("")}
           </tr>
         </thead>
         <tbody>${rows.join("")}</tbody>
       </table>
       <div class="report-summary">
-        <div><span>Wochensumme</span><strong>${formatHours(total)}</strong></div>
+        <div><span>Wochensumme</span><strong>${formatDuration(total)}</strong></div>
         <div><span>Sollstunden</span><strong>${formatHours(target)}</strong></div>
-        <div><span>Plus / Minus</span><strong>${formatSignedHours(balance)}</strong></div>
-        <div><span>Start-Übertrag</span><strong>${formatSignedHours(getStartCarry())}</strong></div>
-        <div><span>Übertrag gesamt</span><strong>${formatSignedHours(carry)}</strong></div>
+        <div><span>Plus / Minus</span><strong>${formatSignedDuration(balance)}</strong></div>
+        <div><span>Übertrag Vorwoche</span><strong>${formatSignedDuration(getCarryBeforeWeek(selectedPeriod.year, selectedPeriod.week))}</strong></div>
+        <div><span>Neuer Übertrag</span><strong>${formatSignedDuration(carry)}</strong></div>
       </div>
     `;
   }
@@ -833,11 +1059,11 @@
       return `
         <tr>
           <td>${period.year} - KW ${period.week}</td>
-          <td>${formatShortDate(dates[0])} - ${formatShortDate(dates[4])}</td>
-          <td>${formatHours(weekTotalValue)}</td>
+          <td>${formatShortDate(dates[0])} - ${formatShortDate(dates[6])}</td>
+          <td>${formatDuration(weekTotalValue)}</td>
           <td>${formatHours(weekTargetValue)}</td>
-          <td>${formatSignedHours(weekBalanceValue)}</td>
-          <td>${formatSignedHours(weekCarry)}</td>
+          <td>${formatSignedDuration(weekBalanceValue)}</td>
+          <td>${formatSignedDuration(weekCarry)}</td>
         </tr>`;
     }).join("");
 
@@ -869,10 +1095,10 @@
         <div><span>Krankheitstage</span><strong>${stats.summary.illness}</strong></div>
         <div><span>Feiertage</span><strong>${stats.summary.holiday}</strong></div>
         <div><span>Freie Tage</span><strong>${stats.summary.free}</strong></div>
-        <div><span>Ist-Stunden</span><strong>${formatHours(stats.total)}</strong></div>
+        <div><span>Ist-Stunden</span><strong>${formatDuration(stats.total)}</strong></div>
         <div><span>Sollstunden</span><strong>${formatHours(stats.target)}</strong></div>
-        <div><span>Plus / Minus</span><strong>${formatSignedHours(stats.balance)}</strong></div>
-        <div><span>Übertrag gesamt</span><strong>${formatSignedHours(stats.carry)}</strong></div>
+        <div><span>Plus / Minus</span><strong>${formatSignedDuration(stats.balance)}</strong></div>
+        <div><span>Übertrag gesamt</span><strong>${formatSignedDuration(stats.carry)}</strong></div>
       </div>
     `;
   }
@@ -888,9 +1114,9 @@
         <td>${monthStats.summary.illness}</td>
         <td>${monthStats.summary.holiday}</td>
         <td>${monthStats.summary.free}</td>
-        <td>${formatHours(monthStats.total)}</td>
+        <td>${formatDuration(monthStats.total)}</td>
         <td>${formatHours(monthStats.target)}</td>
-        <td>${formatSignedHours(monthStats.balance)}</td>
+        <td>${formatSignedDuration(monthStats.balance)}</td>
       </tr>`).join("");
 
     report.innerHTML = `
@@ -924,30 +1150,24 @@
         <div><span>Krankheitstage</span><strong>${stats.summary.illness}</strong></div>
         <div><span>Feiertage</span><strong>${stats.summary.holiday}</strong></div>
         <div><span>Freie Tage</span><strong>${stats.summary.free}</strong></div>
-        <div><span>Ist-Stunden</span><strong>${formatHours(stats.total)}</strong></div>
+        <div><span>Ist-Stunden</span><strong>${formatDuration(stats.total)}</strong></div>
         <div><span>Sollstunden</span><strong>${formatHours(stats.target)}</strong></div>
-        <div><span>Plus / Minus</span><strong>${formatSignedHours(stats.balance)}</strong></div>
-        <div><span>Übertrag gesamt</span><strong>${formatSignedHours(stats.carry)}</strong></div>
+        <div><span>Plus / Minus</span><strong>${formatSignedDuration(stats.balance)}</strong></div>
+        <div><span>Übertrag gesamt</span><strong>${formatSignedDuration(stats.carry)}</strong></div>
       </div>
     `;
   }
 
   function reportDayRow(day) {
     const date = new Date(`${day.date}T00:00:00`);
-    const dayType = getDayTypeLabel(day);
-    const holidayDate = isHoliday(date);
-    const dayLabel = holidayDate ? `${dayType} - Feiertag` : dayType;
-    const timeEntries = day.entries
-      .filter((entry) => entry.from || entry.to)
-      .map((entry) => `${entry.category}: ${entry.from || "-"} - ${entry.to || "-"}`);
-    const timesText = timeEntries.length > 0 ? timeEntries.join("<br>") : "";
+    const entryCells = day.entries
+      .map((entry) => `<td>${escapeHtml(entry.from || "")}</td><td>${escapeHtml(entry.to || "")}</td>`)
+      .join("");
     const remark = day.remark ? escapeHtml(day.remark) : "";
     return `<tr>
-      <td>${escapeHtml(formatDate(date))}</td>
-      <td>${escapeHtml(day.weekday)}</td>
-      <td>${escapeHtml(dayLabel)}</td>
-      <td>${timesText}</td>
-      <td>${formatHours(getDayTotal(day))}</td>
+      <td><strong>${escapeHtml(day.weekday)}</strong><br>${escapeHtml(formatDate(date))}</td>
+      ${entryCells}
+      <td>${formatDuration(getDayTotal(day))}</td>
       <td>${remark}</td>
     </tr>`;
   }
@@ -1001,7 +1221,7 @@
 
   function getDayTotal(day) {
     const dayType = day.dayType || "workday";
-    if (dayType === "free") {
+    if (dayType === "free" || dayType === "holiday") {
       return 0;
     }
     if (dayType === "vacation" || dayType === "illness") {
@@ -1016,7 +1236,7 @@
 
   function getDayTarget(day) {
     const dayType = day.dayType || "workday";
-    if (dayType === "free") {
+    if (dayType === "free" || dayType === "holiday") {
       return 0;
     }
     if (dayType === "vacation" || dayType === "illness") {
@@ -1039,6 +1259,17 @@
       return 0;
     }
     return roundHours((to - from) / 60);
+  }
+
+  function getCarryBeforeWeek(targetYear, targetWeek) {
+    let carry = getStartCarry();
+    forEachPeriod((year, week) => {
+      if (year === targetYear && week === targetWeek) {
+        return;
+      }
+      carry = roundHours(carry + getWeekTotal(year, week) - getWeekTarget(year, week));
+    }, targetYear, targetWeek);
+    return carry;
   }
 
   function getCarryAfterWeek(targetYear, targetWeek) {
@@ -1067,10 +1298,12 @@
         summary.illness += 1;
       } else if (dayType === "free") {
         summary.free += 1;
+      } else if (dayType === "holiday") {
+        summary.holiday += 1;
       } else {
         summary.workday += 1;
       }
-      if (isHoliday(new Date(`${day.date}T00:00:00`))) {
+      if (dayType !== "holiday" && isHoliday(new Date(`${day.date}T00:00:00`))) {
         summary.holiday += 1;
       }
       return summary;
@@ -1126,7 +1359,7 @@
     mondayWeek1.setDate(jan4.getDate() - jan4Day + 1);
     const monday = new Date(mondayWeek1);
     monday.setDate(mondayWeek1.getDate() + (week - 1) * 7);
-    return [0, 1, 2, 3, 4].map((offset) => {
+    return [0, 1, 2, 3, 4, 5, 6].map((offset) => {
       const date = new Date(monday);
       date.setDate(monday.getDate() + offset);
       return date;
@@ -1207,6 +1440,23 @@
     return `${sign}${formatHours(hours)}`;
   }
 
+  function formatDuration(hours) {
+    const totalMinutes = Math.round(Math.abs(roundHours(hours)) * 60);
+    const wholeHours = Math.floor(totalMinutes / 60);
+    const minutes = String(totalMinutes % 60).padStart(2, "0");
+    return `${wholeHours}:${minutes} h`;
+  }
+
+  function formatSignedDuration(hours) {
+    const sign = hours > 0 ? "+" : hours < 0 ? "-" : "";
+    return `${sign}${formatDuration(hours)}`;
+  }
+
+  function formatDurationInput(hours) {
+    const sign = hours < 0 ? "-" : "";
+    return `${sign}${formatDuration(hours).replace(" h", "")}`;
+  }
+
   function formatDecimal(number) {
     return roundHours(number).toFixed(2).replace(".", ",");
   }
@@ -1218,6 +1468,18 @@
     }
     const number = Number(normalized);
     return Number.isFinite(number) ? roundHours(number) : null;
+  }
+
+  function parseCarryInput(value) {
+    const raw = String(value || "").trim().replace(/\s*h$/i, "");
+    const timeMatch = raw.match(/^([+-]?)(\d{1,3}):([0-5]\d)$/);
+    if (timeMatch) {
+      const sign = timeMatch[1] === "-" ? -1 : 1;
+      const hours = Number(timeMatch[2]);
+      const minutes = Number(timeMatch[3]);
+      return roundHours(sign * (hours + minutes / 60));
+    }
+    return parseDecimal(raw);
   }
 
   function roundHours(number) {
@@ -1296,7 +1558,8 @@
       workday: "Arbeitstag",
       vacation: "Urlaub",
       illness: "Krankheit",
-      free: "Frei"
+      free: "Frei",
+      holiday: "Feiertag"
     };
     return map[dayType] || "Arbeitstag";
   }
@@ -1360,7 +1623,7 @@
     if (reportType === "year") {
       return `Rapport_Jahr_${selected.getFullYear()}.pdf`;
     }
-    return `Rapport_Woche_KW${weekText}_${selectedPeriod.year}.pdf`;
+    return `Rapport_KW${weekText}_${selectedPeriod.year}.pdf`;
   }
 
   function triggerPrint() {

@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mockup Wochenansicht - Arbeitsstunden V2</title>
+    <style>
+      :root {
+        --bg: #f4f6f2;
+        --panel: #ffffff;
+        --ink: #1f2623;
+        --muted: #66716b;
+        --line: #d8dfd8;
+        --header: #eef3ef;
+        --brand: #2f6f5e;
+        --green: #1f7a4d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 17px;
+      }
+
+      main {
+        padding: 24px;
+      }
+
+      h1,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 6px;
+        font-size: 1.8rem;
+      }
+
+      .mockup-note {
+        margin-bottom: 18px;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .week-sheet {
+        overflow: hidden;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: 0 10px 28px rgba(31, 38, 35, 0.08);
+      }
+
+      .week-info {
+        display: grid;
+        grid-template-columns: minmax(220px, 1.8fr) repeat(4, minmax(150px, 1fr));
+        gap: 12px;
+        padding: 16px;
+        border-bottom: 1px solid var(--line);
+        background: #fbfcfb;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      input,
+      select {
+        width: 100%;
+        min-height: 48px;
+        border: 2px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: var(--ink);
+        padding: 8px 10px;
+        font: inherit;
+        text-transform: none;
+      }
+
+      input:focus,
+      select:focus {
+        outline: 4px solid rgba(47, 111, 94, 0.2);
+        border-color: var(--brand);
+      }
+
+      .table-scroll {
+        max-height: calc(100vh - 290px);
+        overflow: auto;
+      }
+
+      .week-table {
+        width: 100%;
+        min-width: 1320px;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+      }
+
+      .week-table th,
+      .week-table td {
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        padding: 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .week-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--header);
+        color: var(--ink);
+        font-size: 0.86rem;
+        line-height: 1.18;
+      }
+
+      .week-table thead tr:nth-child(2) th {
+        top: 54px;
+        color: var(--muted);
+        font-size: 0.78rem;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      .sticky-day {
+        position: sticky;
+        left: 0;
+        z-index: 3;
+        width: 190px;
+        background: #fff;
+      }
+
+      thead .sticky-day {
+        z-index: 4;
+        background: var(--header);
+      }
+
+      .day-cell {
+        display: grid;
+        gap: 8px;
+      }
+
+      .day-name {
+        font-size: 1rem;
+        font-weight: 900;
+      }
+
+      .day-date {
+        color: var(--muted);
+        font-size: 0.85rem;
+        font-weight: 800;
+      }
+
+      .day-type {
+        min-height: 44px;
+        font-size: 0.95rem;
+      }
+
+      .time-input {
+        min-height: 46px;
+        padding-inline: 8px;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+      }
+
+      .total-cell {
+        background: #f7faf7;
+        font-size: 1.05rem;
+        font-weight: 900;
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .remark-input {
+        text-align: left;
+      }
+
+      .week-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(170px, 1fr));
+        gap: 12px;
+        padding: 16px;
+        background: #fbfcfb;
+      }
+
+      .summary-box {
+        display: grid;
+        gap: 8px;
+        min-height: 84px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .summary-box span {
+        color: var(--muted);
+        font-size: 0.86rem;
+        font-weight: 800;
+      }
+
+      .summary-box strong {
+        font-size: 1.45rem;
+      }
+
+      .summary-box.highlight {
+        border-color: #add8be;
+        background: #e6f5ec;
+      }
+
+      .summary-box.highlight strong {
+        color: var(--green);
+      }
+
+      @media (max-width: 900px) {
+        main {
+          padding: 14px;
+        }
+
+        .week-info,
+        .week-summary {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .table-scroll {
+          max-height: none;
+        }
+      }
+
+      @media print {
+        body {
+          background: #fff;
+          font-size: 11px;
+        }
+
+        main {
+          padding: 0;
+        }
+
+        .mockup-note {
+          display: none;
+        }
+
+        .week-sheet {
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+
+        .table-scroll {
+          max-height: none;
+          overflow: visible;
+        }
+
+        .week-table {
+          min-width: 0;
+          table-layout: fixed;
+        }
+
+        input,
+        select {
+          min-height: 28px;
+          border: 1px solid #cfd7d1;
+          padding: 3px 4px;
+          font-size: 10px;
+        }
+
+        .week-summary {
+          grid-template-columns: repeat(4, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Wochenansicht als Tabellenentwurf</h1>
+      <p class="mockup-note">Separater Entwurf nach Excel-Vorlage. Die bestehende App ist dadurch noch nicht geaendert.</p>
+
+      <section class="week-sheet" aria-label="Wochenansicht Mockup">
+        <div class="week-info">
+          <label>
+            Name
+            <input type="text" value="Christiane Burgert">
+          </label>
+          <label>
+            Kalenderwoche
+            <select>
+              <option>2026 - KW 27</option>
+            </select>
+          </label>
+          <label>
+            Woche von
+            <input type="text" value="29.06.2026" readonly>
+          </label>
+          <label>
+            Woche bis
+            <input type="text" value="05.07.2026" readonly>
+          </label>
+          <label>
+            Uebertrag Vorwoche
+            <input type="text" value="+36,12 h">
+          </label>
+        </div>
+
+        <div class="table-scroll" tabindex="0" aria-label="Wochen-Tabelle horizontal scrollbar">
+          <table class="week-table">
+            <thead>
+              <tr>
+                <th class="sticky-day" rowspan="2">Tag</th>
+                <th colspan="2">Arbeit in der Gruppe vormittags</th>
+                <th colspan="2">Arbeit in der Gruppe nachmittags</th>
+                <th colspan="2">Paedagogische Vor- und Nachbereitung</th>
+                <th colspan="2">Dienstbeginn / Entlassen / Raum richten</th>
+                <th colspan="2">Elternarbeit</th>
+                <th colspan="2">Dienstbesprechung</th>
+                <th rowspan="2">Gesamte Tagesarbeitszeit</th>
+                <th rowspan="2">Bemerkung</th>
+              </tr>
+              <tr>
+                <th>Von</th>
+                <th>Bis</th>
+                <th>Von</th>
+                <th>Bis</th>
+                <th>Von</th>
+                <th>Bis</th>
+                <th>Von</th>
+                <th>Bis</th>
+                <th>Von</th>
+                <th>Bis</th>
+                <th>Von</th>
+                <th>Bis</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th class="sticky-day">
+                  <div class="day-cell">
+                    <span class="day-name">Montag</span>
+                    <span class="day-date">29.06.2026</span>
+                    <select class="day-type"><option>Arbeit</option><option>Urlaub</option><option>Krankheit</option><option>Feiertag</option><option>Frei</option></select>
+                  </div>
+                </th>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="10:15"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="13:00"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="14:00"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="16:00"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td class="total-cell">4,75 h</td>
+                <td><input class="remark-input" type="text" value=""></td>
+              </tr>
+              <tr>
+                <th class="sticky-day">
+                  <div class="day-cell">
+                    <span class="day-name">Dienstag</span>
+                    <span class="day-date">30.06.2026</span>
+                    <select class="day-type"><option>Arbeit</option><option>Urlaub</option><option>Krankheit</option><option>Feiertag</option><option>Frei</option></select>
+                  </div>
+                </th>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="07:30"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="08:30"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="10:00"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="13:00"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td class="total-cell">4,00 h</td>
+                <td><input class="remark-input" type="text" value=""></td>
+              </tr>
+              <tr>
+                <th class="sticky-day"><div class="day-cell"><span class="day-name">Mittwoch</span><span class="day-date">01.07.2026</span><select class="day-type"><option>Arbeit</option><option>Urlaub</option><option>Krankheit</option><option>Feiertag</option><option>Frei</option></select></div></th>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="08:00"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="09:00"></td>
+                <td class="total-cell">1,00 h</td>
+                <td><input class="remark-input" type="text" value=""></td>
+              </tr>
+              <tr>
+                <th class="sticky-day"><div class="day-cell"><span class="day-name">Donnerstag</span><span class="day-date">02.07.2026</span><select class="day-type"><option>Arbeit</option><option>Urlaub</option><option>Krankheit</option><option>Feiertag</option><option>Frei</option></select></div></th>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="12:00"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="15:00"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td><td><input class="time-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></td>
+                <td class="total-cell">3,00 h</td>
+                <td><input class="remark-input" type="text" value=""></td>
+              </tr>
+              <tr>
+                <th class="sticky-day"><div class="day-cell"><span class="day-name">Freitag</span><span class="day-date">03.07.2026</span><select class="day-type"><option>Urlaub</option><option>Arbeit</option><option>Krankheit</option><option>Feiertag</option><option>Frei</option></select></div></th>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td class="total-cell">4,09 h</td>
+                <td><input class="remark-input" type="text" value=""></td>
+              </tr>
+              <tr>
+                <th class="sticky-day"><div class="day-cell"><span class="day-name">Samstag</span><span class="day-date">04.07.2026</span><select class="day-type"><option>Frei</option><option>Arbeit</option><option>Urlaub</option><option>Krankheit</option><option>Feiertag</option></select></div></th>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td class="total-cell">0,00 h</td>
+                <td><input class="remark-input" type="text" value=""></td>
+              </tr>
+              <tr>
+                <th class="sticky-day"><div class="day-cell"><span class="day-name">Sonntag</span><span class="day-date">05.07.2026</span><select class="day-type"><option>Frei</option><option>Arbeit</option><option>Urlaub</option><option>Krankheit</option><option>Feiertag</option></select></div></th>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td><input class="time-input" type="text" disabled></td><td><input class="time-input" type="text" disabled></td>
+                <td class="total-cell">0,00 h</td>
+                <td><input class="remark-input" type="text" value=""></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="week-summary">
+          <div class="summary-box">
+            <span>Geleistete Wochenarbeitszeit</span>
+            <strong>16,84 h</strong>
+          </div>
+          <div class="summary-box">
+            <span>Soll-Wochenarbeitszeit</span>
+            <strong>20,44 h</strong>
+          </div>
+          <div class="summary-box">
+            <span>Uebertrag Vorwoche</span>
+            <strong>+36,12 h</strong>
+          </div>
+          <div class="summary-box highlight">
+            <span>Neuer Uebertrag</span>
+            <strong>+32,52 h</strong>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

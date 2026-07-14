@@ -12,11 +12,16 @@
   </head>
   <body>
     <header class="app-header">
-      <div>
+      <div class="title-block">
         <p class="eyebrow" id="appSubtitle">Arbeitszeiterfassung</p>
         <h1 id="appTitle">Arbeitsstunden</h1>
+        <p id="saveStatus" class="save-status" hidden>Gespeichert</p>
       </div>
       <div class="header-tools">
+        <label class="header-field header-name-field" for="nameInput">
+          <span>Name</span>
+          <input id="nameInput" type="text" inputmode="text" autocomplete="name" placeholder="Name eingeben" aria-label="Name">
+        </label>
         <label class="header-field" for="dateInput">
           <span>Datum</span>
           <input id="dateInput" type="date" aria-label="Datum auswählen">
@@ -29,16 +34,7 @@
     </header>
 
     <main>
-      <section class="hero-card" aria-label="Name">
-        <label class="hero-label" for="nameInput">Name</label>
-        <input id="nameInput" type="text" inputmode="text" autocomplete="name" placeholder="Name eingeben" aria-label="Name">
-      </section>
-
       <section class="dashboard" aria-label="Übersicht">
-        <article class="metric">
-          <span>Woche</span>
-          <strong id="weekRange">-</strong>
-        </article>
         <article class="metric">
           <span>Wochensumme</span>
           <strong id="weekTotal">0,00 h</strong>
@@ -54,7 +50,7 @@
         <article class="metric">
           <label class="metric-label" for="startCarryInput">Start-Übertrag</label>
           <div class="carry-input-wrap">
-            <input id="startCarryInput" class="carry-input" type="text" inputmode="decimal" autocomplete="off" aria-label="Start-Übertrag in Stunden">
+            <input id="startCarryInput" class="carry-input" type="text" inputmode="numeric" autocomplete="off" aria-label="Start-Übertrag in Stunden und Minuten">
             <span>h</span>
           </div>
         </article>
@@ -156,7 +152,7 @@
           </label>
           <label class="settings-field">
             <span>Start-Übertrag</span>
-            <input id="settingsStartCarryInput" type="text" inputmode="decimal" autocomplete="off" placeholder="36,12">
+            <input id="settingsStartCarryInput" type="text" inputmode="numeric" autocomplete="off" placeholder="36:07">
           </label>
           <label class="settings-field">
             <span>Bundesland / Region</span>
@@ -183,6 +179,11 @@
             <span>Jahr</span>
             <input id="settingsYearInput" type="number" inputmode="numeric" min="2026" step="1" placeholder="2026">
           </label>
+          <div class="settings-actions">
+            <button id="backupSaveButton" type="button">Backup speichern</button>
+            <label class="import-button" for="backupLoadInput">Backup laden</label>
+            <input id="backupLoadInput" class="file-input" type="file" accept="application/json,.json">
+          </div>
           <p class="helper-text">Alle Einstellungen werden lokal gespeichert und bleiben auf diesem Gerät erhalten.</p>
         </div>
       </section>
@@ -203,37 +204,6 @@
         <article id="report" class="report"></article>
       </section>
     </main>
-
-    <template id="dayTemplate">
-      <article class="day-card">
-        <header class="day-head">
-          <div>
-            <h2></h2>
-            <p></p>
-          </div>
-          <strong class="day-total">0,00 h</strong>
-        </header>
-        <div class="day-controls">
-          <label class="day-type-field">
-            <span>Tagesart</span>
-            <select class="day-type-select" aria-label="Tagesart auswählen">
-              <option value="workday">Arbeitstag</option>
-              <option value="vacation">Urlaub</option>
-              <option value="illness">Krankheit</option>
-              <option value="free">Frei / kein Arbeitstag</option>
-            </select>
-          </label>
-          <button class="holiday-button" type="button">Trotz Feiertag Arbeitszeit erfassen</button>
-          <div class="day-status-pill">Arbeitstag</div>
-          <div class="day-target-pill">Soll: 0,00 h</div>
-        </div>
-        <div class="entries"></div>
-        <label class="remarks">
-          <span>Bemerkungen</span>
-          <textarea rows="2" inputmode="text"></textarea>
-        </label>
-      </article>
-    </template>
 
     <script src="app.js" defer></script>
   </body>
