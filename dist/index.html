@@ -34,39 +34,23 @@
     </header>
 
     <main>
-      <section class="dashboard" aria-label="Übersicht">
-        <article class="metric">
-          <span>Wochensumme</span>
-          <strong id="weekTotal">0,00 h</strong>
-        </article>
-        <article class="metric">
-          <span>Soll</span>
-          <strong id="weeklyTargetLabel">20,44 h</strong>
-        </article>
-        <article class="metric balance" id="weekBalanceCard">
-          <span>Plus / Minus</span>
-          <strong id="weekBalance">0,00 h</strong>
-        </article>
-        <article class="metric">
-          <label class="metric-label" for="startCarryInput">Start-Übertrag</label>
-          <div class="carry-input-wrap">
-            <input id="startCarryInput" class="carry-input" type="text" inputmode="numeric" autocomplete="off" aria-label="Start-Übertrag in Stunden und Minuten">
-            <span>h</span>
-          </div>
-        </article>
-        <article class="metric balance" id="carryBalanceCard">
-          <span>Übertrag gesamt</span>
-          <strong id="carryBalance">36,12 h</strong>
-        </article>
-      </section>
+      <div class="primary-toolbar">
+        <nav class="tabbar" aria-label="Ansichten">
+          <button class="tab active" data-view="entryView" type="button">Wochenübersicht</button>
+          <button class="tab" data-view="monthlyView" type="button">Monatsübersicht</button>
+          <button class="tab" data-view="yearlyView" type="button">Jahresübersicht</button>
+          <button class="tab" data-view="settingsView" type="button">Einstellungen</button>
+          <button class="tab" data-view="reportView" type="button">Rapport</button>
+        </nav>
 
-      <nav class="tabbar" aria-label="Ansichten">
-        <button class="tab active" data-view="entryView" type="button">Wochenübersicht</button>
-        <button class="tab" data-view="monthlyView" type="button">Monatsübersicht</button>
-        <button class="tab" data-view="yearlyView" type="button">Jahresübersicht</button>
-        <button class="tab" data-view="settingsView" type="button">Einstellungen</button>
-        <button class="tab" data-view="reportView" type="button">Rapport</button>
-      </nav>
+        <section class="dashboard" aria-label="Übersicht">
+          <article class="metric carry-metric">
+            <label class="metric-label" for="weekCarryInput">Übertrag</label>
+            <input id="weekCarryInput" class="carry-input" type="text" inputmode="numeric" autocomplete="off" aria-label="Übertrag zu Beginn der Woche">
+            <small id="weekCarryHint" class="carry-hint" hidden>Übertrag manuell angepasst</small>
+          </article>
+        </section>
+      </div>
 
       <section id="entryView" class="view active" aria-label="Wochen-Eingabe">
         <div id="dayCards" class="day-grid"></div>
@@ -149,10 +133,6 @@
           <label class="settings-field">
             <span>Sollstunden pro Woche</span>
             <input id="weeklyTargetInput" type="text" inputmode="decimal" autocomplete="off" placeholder="20,44">
-          </label>
-          <label class="settings-field">
-            <span>Start-Übertrag</span>
-            <input id="settingsStartCarryInput" type="text" inputmode="numeric" autocomplete="off" placeholder="36:07">
           </label>
           <label class="settings-field">
             <span>Bundesland / Region</span>

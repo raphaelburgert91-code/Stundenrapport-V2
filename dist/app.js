@@ -5,7 +5,7 @@
   const START_WEEK = 27;
   const END_YEAR = Math.max(new Date().getFullYear() + 10, 2036);
   const DEFAULT_WEEKLY_TARGET = 20.44;
-  const DEFAULT_START_CARRY = 36.12;
+  const DEFAULT_START_CARRY = 0;
   const STORAGE_KEY = "stundenrapport-mama-v2";
   const OLD_STORAGE_KEY = "stundenrapport-christiane-burgert";
   const LAST_PERIOD_KEY = "stundenrapport-last-period";
@@ -42,19 +42,13 @@
   const nameInput = document.getElementById("nameInput");
   const settingsNameInput = document.getElementById("settingsNameInput");
   const weeklyTargetInput = document.getElementById("weeklyTargetInput");
-  const startCarryInput = document.getElementById("startCarryInput");
-  const settingsStartCarryInput = document.getElementById("settingsStartCarryInput");
+  const weekCarryInput = document.getElementById("weekCarryInput");
+  const weekCarryHint = document.getElementById("weekCarryHint");
   const settingsRegionInput = document.getElementById("settingsRegionInput");
   const settingsYearInput = document.getElementById("settingsYearInput");
-  const weeklyTargetLabel = document.getElementById("weeklyTargetLabel");
   const saveStatus = document.getElementById("saveStatus");
   const backupSaveButton = document.getElementById("backupSaveButton");
   const backupLoadInput = document.getElementById("backupLoadInput");
-  const weekTotal = document.getElementById("weekTotal");
-  const weekBalance = document.getElementById("weekBalance");
-  const carryBalance = document.getElementById("carryBalance");
-  const weekBalanceCard = document.getElementById("weekBalanceCard");
-  const carryBalanceCard = document.getElementById("carryBalanceCard");
   const dayCards = document.getElementById("dayCards");
   const monthSelect = document.getElementById("monthSelect");
   const yearSelect = document.getElementById("yearSelect");
@@ -104,18 +98,11 @@
       saveState();
       render();
     });
-    const updateStartCarry = (valueInput) => {
-      const value = parseCarryInput(valueInput.value);
-      if (value === null) {
-        return;
-      }
-      state.settings.startCarry = value;
-      saveState();
-      render();
-    };
-
-    startCarryInput.addEventListener("input", () => updateStartCarry(startCarryInput));
-    settingsStartCarryInput.addEventListener("input", () => updateStartCarry(settingsStartCarryInput));
+    weekCarryInput.addEventListener("input", () => {
+      weekCarryInput.classList.remove("invalid");
+    });
+    weekCarryInput.addEventListener("blur", commitWeekCarryInput);
+    weekCarryInput.addEventListener("change", commitWeekCarryInput);
     settingsRegionInput.addEventListener("change", () => {
       state.settings.region = settingsRegionInput.value;
       saveState();
@@ -264,7 +251,7 @@
   }
 
   function normalizeState(savedState) {
-    return {
+    const normalized = {
       weeks: savedState.weeks || {},
       settings: {
         name: typeof savedState.settings?.name === "string" ? savedState.settings.name : "",
@@ -282,6 +269,28 @@
           : new Date().getFullYear(),
         categories: normalizeCategories(savedState.settings?.categories)
       }
+    };
+    migrateStartCarryToWeekCarry(normalized);
+    return normalized;
+  }
+
+  function migrateStartCarryToWeekCarry(normalized) {
+    const hasWeekCarry = Object.values(normalized.weeks || {}).some((week) => Number.isFinite(week?.carry?.value));
+    if (hasWeekCarry) {
+      return;
+    }
+    const legacyCarry = normalized.settings.startCarry;
+    if (!Number.isFinite(legacyCarry) || legacyCarry === 0) {
+      return;
+    }
+    const keys = Object.keys(normalized.weeks || {}).sort(comparePeriodKeys);
+    const targetKey = keys[0] || periodKey(START_YEAR, START_WEEK);
+    if (!normalized.weeks[targetKey]) {
+      normalized.weeks[targetKey] = { days: {} };
+    }
+    normalized.weeks[targetKey].carry = {
+      value: roundHours(legacyCarry),
+      manual: true
     };
   }
 
@@ -305,6 +314,31 @@
   function saveName(value) {
     state.settings.name = String(value || "").trim();
     saveState();
+  }
+
+  function commitWeekCarryInput() {
+    const parsed = parseCarryInput(weekCarryInput.value);
+    const week = getWeek(selectedPeriod.year, selectedPeriod.week);
+    if (parsed.empty) {
+      week.carry = { value: null, manual: false };
+      weekCarryInput.value = formatDurationInput(getCarryBeforeWeek(selectedPeriod.year, selectedPeriod.week));
+      weekCarryInput.classList.remove("invalid");
+      saveState();
+      render();
+      return;
+    }
+    if (!parsed.valid) {
+      weekCarryInput.classList.add("invalid");
+      return;
+    }
+    week.carry = {
+      value: parsed.value,
+      manual: true
+    };
+    weekCarryInput.value = formatDurationInput(parsed.value);
+    weekCarryInput.classList.remove("invalid");
+    saveState();
+    render();
   }
 
   function normalizeCategories(value) {
@@ -444,7 +478,10 @@
     const key = periodKey(year, week);
     let changed = false;
     if (!state.weeks[key]) {
-      state.weeks[key] = { days: {} };
+      state.weeks[key] = { days: {}, carry: { value: null, manual: false } };
+      changed = true;
+    }
+    if (normalizeWeekCarry(state.weeks[key])) {
       changed = true;
     }
 
@@ -472,6 +509,19 @@
     if (changed) {
       saveState();
     }
+  }
+
+  function normalizeWeekCarry(week) {
+    if (week.carry && typeof week.carry === "object") {
+      const value = Number(week.carry.value);
+      const nextValue = Number.isFinite(value) ? roundHours(value) : null;
+      const nextManual = Boolean(week.carry.manual && Number.isFinite(value));
+      const changed = week.carry.value !== nextValue || week.carry.manual !== nextManual;
+      week.carry = { value: nextValue, manual: nextManual };
+      return changed;
+    }
+    week.carry = { value: null, manual: false };
+    return true;
   }
 
   function normalizeDay(day, dayName, index) {
@@ -533,11 +583,8 @@
     nameInput.value = getDisplayName();
     settingsNameInput.value = getDisplayName();
     weeklyTargetInput.value = formatDecimal(getWeeklyTarget());
-    settingsStartCarryInput.value = formatDurationInput(getStartCarry());
-    startCarryInput.value = formatDurationInput(getStartCarry());
     settingsRegionInput.value = getSettingsRegion();
     settingsYearInput.value = String(getSettingsYear());
-    weeklyTargetLabel.textContent = formatHours(getWeekTarget(selectedPeriod.year, selectedPeriod.week));
     dateInput.value = selectedDate;
     weekSelect.value = periodKey(selectedPeriod.year, selectedPeriod.week);
     monthSelect.value = String(selectedMonth);
@@ -548,20 +595,12 @@
   }
 
   function renderDashboard() {
-    const total = getWeekTotal(selectedPeriod.year, selectedPeriod.week);
-    const target = getWeekTarget(selectedPeriod.year, selectedPeriod.week);
-    const balance = roundHours(total - target);
-    const carry = getCarryAfterWeek(selectedPeriod.year, selectedPeriod.week);
-
-    weekTotal.textContent = formatDuration(total);
-    weekBalance.textContent = formatSignedDuration(balance);
-    if (document.activeElement !== startCarryInput && document.activeElement !== settingsStartCarryInput) {
-      startCarryInput.value = formatDurationInput(getStartCarry());
-      settingsStartCarryInput.value = formatDurationInput(getStartCarry());
+    const week = getWeek(selectedPeriod.year, selectedPeriod.week);
+    const carryBefore = getCarryBeforeWeek(selectedPeriod.year, selectedPeriod.week);
+    if (document.activeElement !== weekCarryInput) {
+      weekCarryInput.value = formatDurationInput(carryBefore);
     }
-    carryBalance.textContent = formatSignedDuration(carry);
-    setBalanceClass(weekBalanceCard, balance);
-    setBalanceClass(carryBalanceCard, carry);
+    weekCarryHint.hidden = !(week.carry?.manual && Number.isFinite(week.carry.value));
   }
 
   function renderEntryView() {
@@ -719,13 +758,11 @@
     }
     const total = getWeekTotal(selectedPeriod.year, selectedPeriod.week);
     const target = getWeekTarget(selectedPeriod.year, selectedPeriod.week);
-    const carryBefore = getCarryBeforeWeek(selectedPeriod.year, selectedPeriod.week);
     const newCarry = getCarryAfterWeek(selectedPeriod.year, selectedPeriod.week);
     summary.innerHTML = `
       <div class="summary-card"><span>Geleistete Wochenarbeitszeit</span><strong>${formatDuration(total)}</strong></div>
       <div class="summary-card"><span>Soll-Wochenarbeitszeit</span><strong>${formatHours(target)}</strong></div>
-      <div class="summary-card"><span>Übertrag Vorwoche</span><strong>${formatSignedDuration(carryBefore)}</strong></div>
-      <div class="summary-card balance ${newCarry >= 0 ? "positive" : "negative"}"><span>Neuer Übertrag</span><strong>${formatSignedDuration(newCarry)}</strong></div>
+      <div class="summary-card balance ${newCarry >= 0 ? "positive" : "negative"}"><span>Neuer Übertrag</span><strong>${formatCarryDuration(newCarry)}</strong></div>
     `;
   }
 
@@ -862,7 +899,7 @@
       </article>
       <article class="summary-card">
         <span>Übertrag</span>
-        <strong>${formatSignedDuration(carry)}</strong>
+        <strong>${formatCarryDuration(carry)}</strong>
       </article>
     `;
 
@@ -881,7 +918,7 @@
               <td>${formatDuration(weekTotalValue)}</td>
               <td>${formatHours(weekTargetValue)}</td>
               <td>${formatSignedDuration(weekBalanceValue)}</td>
-              <td>${formatSignedDuration(weekCarry)}</td>
+              <td>${formatCarryDuration(weekCarry)}</td>
             </tr>`;
         }).join("");
   }
@@ -979,8 +1016,8 @@
           <strong>${formatSignedDuration(totalBalance)}</strong>
         </article>
         <article class="summary-card">
-          <span>Übertrag gesamt</span>
-          <strong>${formatSignedDuration(yearCarry)}</strong>
+          <span>Übertrag</span>
+          <strong>${formatCarryDuration(yearCarry)}</strong>
         </article>
       `;
     }
@@ -1006,7 +1043,7 @@
 
     const total = getWeekTotal(selectedPeriod.year, selectedPeriod.week);
     const target = getWeekTarget(selectedPeriod.year, selectedPeriod.week);
-    const balance = roundHours(total - target);
+    const carryBefore = getCarryBeforeWeek(selectedPeriod.year, selectedPeriod.week);
     const carry = getCarryAfterWeek(selectedPeriod.year, selectedPeriod.week);
 
     report.innerHTML = `
@@ -1036,11 +1073,10 @@
         <tbody>${rows.join("")}</tbody>
       </table>
       <div class="report-summary">
-        <div><span>Wochensumme</span><strong>${formatDuration(total)}</strong></div>
-        <div><span>Sollstunden</span><strong>${formatHours(target)}</strong></div>
-        <div><span>Plus / Minus</span><strong>${formatSignedDuration(balance)}</strong></div>
-        <div><span>Übertrag Vorwoche</span><strong>${formatSignedDuration(getCarryBeforeWeek(selectedPeriod.year, selectedPeriod.week))}</strong></div>
-        <div><span>Neuer Übertrag</span><strong>${formatSignedDuration(carry)}</strong></div>
+        <div><span>Übertrag</span><strong>${formatCarryDuration(carryBefore)}</strong></div>
+        <div><span>Geleistete Wochenarbeitszeit</span><strong>${formatDuration(total)}</strong></div>
+        <div><span>Soll-Wochenarbeitszeit</span><strong>${formatHours(target)}</strong></div>
+        <div><span>Neuer Übertrag</span><strong>${formatCarryDuration(carry)}</strong></div>
       </div>
     `;
   }
@@ -1063,7 +1099,7 @@
           <td>${formatDuration(weekTotalValue)}</td>
           <td>${formatHours(weekTargetValue)}</td>
           <td>${formatSignedDuration(weekBalanceValue)}</td>
-          <td>${formatSignedDuration(weekCarry)}</td>
+          <td>${formatCarryDuration(weekCarry)}</td>
         </tr>`;
     }).join("");
 
@@ -1098,7 +1134,7 @@
         <div><span>Ist-Stunden</span><strong>${formatDuration(stats.total)}</strong></div>
         <div><span>Sollstunden</span><strong>${formatHours(stats.target)}</strong></div>
         <div><span>Plus / Minus</span><strong>${formatSignedDuration(stats.balance)}</strong></div>
-        <div><span>Übertrag gesamt</span><strong>${formatSignedDuration(stats.carry)}</strong></div>
+        <div><span>Neuer Übertrag</span><strong>${formatCarryDuration(stats.carry)}</strong></div>
       </div>
     `;
   }
@@ -1153,7 +1189,7 @@
         <div><span>Ist-Stunden</span><strong>${formatDuration(stats.total)}</strong></div>
         <div><span>Sollstunden</span><strong>${formatHours(stats.target)}</strong></div>
         <div><span>Plus / Minus</span><strong>${formatSignedDuration(stats.balance)}</strong></div>
-        <div><span>Übertrag gesamt</span><strong>${formatSignedDuration(stats.carry)}</strong></div>
+        <div><span>Neuer Übertrag</span><strong>${formatCarryDuration(stats.carry)}</strong></div>
       </div>
     `;
   }
@@ -1262,23 +1298,39 @@
   }
 
   function getCarryBeforeWeek(targetYear, targetWeek) {
-    let carry = getStartCarry();
+    let previousCarry = 0;
+    let carryBefore = 0;
     forEachPeriod((year, week) => {
+      const currentWeek = getWeek(year, week);
+      carryBefore = getWeekCarryStart(currentWeek, previousCarry);
       if (year === targetYear && week === targetWeek) {
         return;
       }
-      carry = roundHours(carry + getWeekTotal(year, week) - getWeekTarget(year, week));
+      previousCarry = roundHours(carryBefore + getWeekTotal(year, week) - getWeekTarget(year, week));
+    }, targetYear, targetWeek);
+    return carryBefore;
+  }
+
+  function getCarryAfterWeek(targetYear, targetWeek) {
+    let carry = 0;
+    forEachPeriod((year, week) => {
+      const currentWeek = getWeek(year, week);
+      const carryBefore = getWeekCarryStart(currentWeek, carry);
+      carry = roundHours(carryBefore + getWeekTotal(year, week) - getWeekTarget(year, week));
     }, targetYear, targetWeek);
     return carry;
   }
 
-  function getCarryAfterWeek(targetYear, targetWeek) {
-    let carry = getStartCarry();
-    forEachPeriod((year, week) => {
-      ensureWeek(year, week);
-      carry = roundHours(carry + getWeekTotal(year, week) - getWeekTarget(year, week));
-    }, targetYear, targetWeek);
-    return carry;
+  function getWeek(year, week) {
+    ensureWeek(year, week);
+    return state.weeks[periodKey(year, week)];
+  }
+
+  function getWeekCarryStart(week, automaticValue) {
+    if (week?.carry?.manual && Number.isFinite(week.carry.value)) {
+      return roundHours(week.carry.value);
+    }
+    return roundHours(automaticValue || 0);
   }
 
   function getWeeklyTarget() {
@@ -1392,6 +1444,15 @@
     return { year: Number(match[1]), week: Number(match[2]) };
   }
 
+  function comparePeriodKeys(leftKey, rightKey) {
+    const left = parsePeriodKey(leftKey);
+    const right = parsePeriodKey(rightKey);
+    if (left.year !== right.year) {
+      return left.year - right.year;
+    }
+    return left.week - right.week;
+  }
+
   function isAllowedPeriod(year, week) {
     if (year < START_YEAR || year > END_YEAR) {
       return false;
@@ -1452,6 +1513,11 @@
     return `${sign}${formatDuration(hours)}`;
   }
 
+  function formatCarryDuration(hours) {
+    const sign = hours < 0 ? "-" : "";
+    return `${sign}${formatDuration(hours)}`;
+  }
+
   function formatDurationInput(hours) {
     const sign = hours < 0 ? "-" : "";
     return `${sign}${formatDuration(hours).replace(" h", "")}`;
@@ -1472,14 +1538,38 @@
 
   function parseCarryInput(value) {
     const raw = String(value || "").trim().replace(/\s*h$/i, "");
+    if (!raw) {
+      return { empty: true, valid: false, value: null };
+    }
     const timeMatch = raw.match(/^([+-]?)(\d{1,3}):([0-5]\d)$/);
     if (timeMatch) {
       const sign = timeMatch[1] === "-" ? -1 : 1;
       const hours = Number(timeMatch[2]);
       const minutes = Number(timeMatch[3]);
-      return roundHours(sign * (hours + minutes / 60));
+      return { empty: false, valid: true, value: roundHours(sign * (hours + minutes / 60)) };
     }
-    return parseDecimal(raw);
+    const digitMatch = raw.match(/^([+-]?)(\d+)$/);
+    if (digitMatch) {
+      const sign = digitMatch[1] === "-" ? -1 : 1;
+      const digits = digitMatch[2];
+      if (digits === "0") {
+        return { empty: false, valid: true, value: 0 };
+      }
+      if (digits.length <= 2) {
+        return { empty: false, valid: true, value: sign * Number(digits) };
+      }
+      const hours = Number(digits.slice(0, -2));
+      const minutes = Number(digits.slice(-2));
+      if (minutes >= 60) {
+        return { empty: false, valid: false, value: null };
+      }
+      return { empty: false, valid: true, value: roundHours(sign * (hours + minutes / 60)) };
+    }
+    const decimal = parseDecimal(raw);
+    if (decimal !== null) {
+      return { empty: false, valid: true, value: decimal };
+    }
+    return { empty: false, valid: false, value: null };
   }
 
   function roundHours(number) {

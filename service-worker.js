@@ -1,4 +1,4 @@
-const CACHE_NAME = "arbeitsstunden-pwa-v2";
+const CACHE_NAME = "arbeitsstunden-pwa-v2-20260715";
 const ASSETS = [
   "./",
   "./index.html",
