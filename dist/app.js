@@ -719,7 +719,6 @@
     remarkInput.type = "text";
     remarkInput.className = "remark-input";
     remarkInput.value = day.remark || "";
-    remarkInput.disabled = day.dayType !== "workday" && !day.remark;
     remarkInput.addEventListener("input", () => {
       day.remark = remarkInput.value;
       saveState();
@@ -1059,6 +1058,12 @@
         </div>
       </div>
       <table class="report-table report-week-table">
+        <colgroup>
+          <col class="report-day-col">
+          ${getCategories().map(() => '<col class="report-time-col"><col class="report-time-col">').join("")}
+          <col class="report-total-col">
+          <col class="report-remark-col">
+        </colgroup>
         <thead>
           <tr>
             <th rowspan="2">Tag</th>
@@ -1272,17 +1277,32 @@
 
   function getDayTarget(day) {
     const dayType = day.dayType || "workday";
-    if (dayType === "free" || dayType === "holiday") {
+    const scheduledTarget = getScheduledDayTarget(day);
+    if (scheduledTarget === 0 || dayType === "holiday") {
       return 0;
     }
-    if (dayType === "vacation" || dayType === "illness") {
-      return roundHours(getWeeklyTarget() / 5);
+    if (dayType === "free" || dayType === "vacation" || dayType === "illness") {
+      return scheduledTarget;
     }
     const holiday = isHoliday(new Date(`${day.date}T00:00:00`));
     if (holiday && !day.allowHolidayWork) {
       return 0;
     }
-    return roundHours(getWeeklyTarget() / 5);
+    return scheduledTarget;
+  }
+
+  function getScheduledDayTarget(day) {
+    const date = new Date(`${day.date}T00:00:00`);
+    const weekdayIndex = (date.getDay() + 6) % 7;
+    if (weekdayIndex > 2) {
+      return 0;
+    }
+
+    const weeklyHundredths = Math.round(getWeeklyTarget() * 100);
+    const baseHundredths = Math.floor(weeklyHundredths / 3);
+    const remainder = weeklyHundredths - (baseHundredths * 3);
+    const dayHundredths = baseHundredths + (weekdayIndex < remainder ? 1 : 0);
+    return dayHundredths / 100;
   }
 
   function getEntryDuration(entry) {

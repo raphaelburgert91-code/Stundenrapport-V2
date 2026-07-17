@@ -968,7 +968,7 @@ textarea {
 @media print {
   body {
     background: #fff;
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .actions {
@@ -1002,34 +1002,104 @@ textarea {
     padding: 0;
   }
 
+  .report-header {
+    margin-bottom: 8px;
+  }
+
+  .report h2 {
+    margin-bottom: 5px;
+    font-size: 21px;
+  }
+
+  .report-meta {
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .report-meta div {
+    padding: 5px 7px;
+    border-radius: 5px;
+  }
+
+  .report-meta span {
+    margin-bottom: 1px;
+    font-size: 9px;
+  }
+
+  .report-meta strong {
+    font-size: 11px;
+  }
+
   .report-table th,
   .report-table td {
-    padding: 5px;
+    padding: 4px;
     vertical-align: top;
   }
 
+  .report-table thead {
+    display: table-header-group;
+  }
+
+  .report-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .report-week-table {
-    font-size: 8px;
+    width: 100%;
+    font-size: 12px;
     table-layout: fixed;
   }
 
   .report-week-table th,
   .report-week-table td {
-    padding: 3px;
-    word-break: break-word;
+    padding: 4px 3px;
+    line-height: 1.18;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+  }
+
+  .report-week-table .report-day-col {
+    width: 11.5%;
+  }
+
+  .report-week-table .report-time-col {
+    width: 4.8%;
+  }
+
+  .report-week-table .report-total-col {
+    width: 8.5%;
+  }
+
+  .report-week-table .report-remark-col {
+    width: 22.4%;
+  }
+
+  .report-table-compact {
+    font-size: 12px;
   }
 
   .report-summary {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
+    margin-top: 8px;
   }
 
   .report-summary div {
-    padding: 8px 10px;
+    padding: 6px 8px;
+  }
+
+  .report-summary span {
+    margin-bottom: 2px;
+    font-size: 10px;
+  }
+
+  .report-summary strong {
+    font-size: 12px;
   }
 
   @page {
     size: A4 landscape;
-    margin: 10mm;
+    margin: 6mm;
   }
 }
